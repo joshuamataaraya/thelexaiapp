@@ -22,7 +22,8 @@ function ChatInterface({ user, signOut }) {
     if (!input.trim() || isLoading) return
 
     const userMessage = { role: 'user', content: input }
-    setMessages(prev => [...prev, userMessage])
+    const updatedMessages = [...messages, userMessage]
+    setMessages(updatedMessages)
     setInput('')
     setIsLoading(true)
 
@@ -36,17 +37,15 @@ function ChatInterface({ user, signOut }) {
         credentials: credentials
       })
 
-      // Prepare the request for Claude 3 Sonnet (or your preferred model)
+      // Prepare the request for Claude 3 Sonnet with full conversation history
       const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'
       const payload = {
         anthropic_version: 'bedrock-2023-05-31',
         max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: input
-          }
-        ]
+        messages: updatedMessages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
       }
 
       const command = new InvokeModelCommand({
