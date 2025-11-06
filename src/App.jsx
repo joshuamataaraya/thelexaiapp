@@ -1,46 +1,13 @@
-import { useState } from 'react'
 import { Authenticator } from '@aws-amplify/ui-react'
 import '@aws-amplify/ui-react/styles.css'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import ChatInterface from './components/ChatInterface'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
     <Authenticator>
       {({ signOut, user }) => (
-        <>
-          <div>
-            <a href="https://vite.dev" target="_blank">
-              <img src={viteLogo} className="logo" alt="Vite logo" />
-            </a>
-            <a href="https://react.dev" target="_blank">
-              <img src={reactLogo} className="logo react" alt="React logo" />
-            </a>
-          </div>
-          <h1>AWS Amplify + Vite + React</h1>
-          {user && (
-            <div style={{ marginBottom: '1rem' }}>
-              <p>Welcome, {user.username}!</p>
-              <button onClick={signOut} style={{ marginTop: '0.5rem' }}>
-                Sign Out
-              </button>
-            </div>
-          )}
-          <div className="card">
-            <button onClick={() => setCount((count) => count + 1)}>
-              count is {count}
-            </button>
-            <p>
-              Edit <code>src/App.jsx</code> and save to test HMR
-            </p>
-          </div>
-          <p className="read-the-docs">
-            AWS Amplify starter project with authentication
-          </p>
-        </>
+        <ChatInterface user={user} signOut={signOut} />
       )}
     </Authenticator>
   )
