@@ -24,8 +24,6 @@ dist-ssr
 *.sw?
 
 # Amplify
-amplify/
-.amplify/
 amplify-*
 aws-exports.js
 awsconfiguration.json
@@ -36,3 +34,7 @@ amplify-gradle-config.json
 amplifytools.xcconfig
 .secret-*
 
+
+# amplify
+amplify_outputs*
+amplifyconfiguration*
