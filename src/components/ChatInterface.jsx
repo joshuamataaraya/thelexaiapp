@@ -33,7 +33,7 @@ function ChatInterface({ user, signOut }) {
       
       // Initialize Bedrock client with user's credentials
       const client = new BedrockRuntimeClient({
-        region: 'us-east-1', // Update with your preferred region
+        region: 'us-east-2', // Update with your preferred region
         credentials: credentials
       })
 

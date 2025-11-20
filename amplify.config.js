@@ -5,8 +5,8 @@
 const amplifyConfig = {
   Auth: {
     Cognito: {
-      userPoolId: 'us-east-2_tXU0grBj1', // Replace with your User Pool ID
-      userPoolClientId: '3g8omsb3padnq8klinrc4v7cbg', // Replace with your App Client ID
+      userPoolId: 'us-east-2_QHxn0Wm9d', // Replace with your User Pool ID
+      userPoolClientId: '267ktl1qeeh8dcdkikv1sr1m2a', // Replace with your App Client ID
       region: 'us-east-2', // Replace with your AWS region
       loginWith: {
         email: true,
