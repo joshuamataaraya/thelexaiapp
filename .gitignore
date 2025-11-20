@@ -22,7 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
+.amplify/
 # Amplify
 amplify-*
 aws-exports.js
@@ -36,5 +36,5 @@ amplifytools.xcconfig
 
 
 # amplify
-amplify_outputs*
-amplifyconfiguration*
+# amplify_outputs*
+# amplifyconfiguration*
