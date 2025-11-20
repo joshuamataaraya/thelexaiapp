@@ -38,7 +38,7 @@ function ChatInterface({ user, signOut }) {
       })
 
       // Prepare the request for Claude 3 Sonnet with full conversation history
-      const modelId = 'anthropic.claude-3-sonnet-20240229-v1:0'
+      const modelId = 'meta.llama4-maverick-17b-instruct-v1:0'
       const payload = {
         anthropic_version: 'bedrock-2023-05-31',
         max_tokens: 1024,
