@@ -38,3 +38,6 @@ amplifytools.xcconfig
 # amplify
 # amplify_outputs*
 # amplifyconfiguration*
+
+amplify_outputs*
+amplifyconfiguration*
