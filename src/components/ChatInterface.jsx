@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { BedrockAgentRuntimeClient, InvokeAgentCommand } from '@aws-sdk/client-bedrock-agent-runtime'
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import './ChatInterface.css'
 
@@ -8,11 +9,14 @@ function ChatInterface({ user, signOut }) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState(null)
+  const [downloadingFiles, setDownloadingFiles] = useState(new Set())
   const messagesEndRef = useRef(null)
   
   // Bedrock Agent configuration
   const AGENT_NAME = 'thelexai-laws-consultant-agent'
   const AGENT_ALIAS_ID = import.meta.env.VITE_BEDROCK_AGENT_ALIAS_ID || 'TSTALIASID' // Use test alias by default
+  const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-2'
+  const CITATION_PREVIEW_LENGTH = 150
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -21,6 +25,81 @@ function ChatInterface({ user, signOut }) {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  const downloadFile = async (s3Uri, fileName) => {
+    setDownloadingFiles(prev => new Set(prev).add(s3Uri))
+    
+    // AWS region configuration
+    const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-2'
+    
+    try {
+      const session = await fetchAuthSession()
+      const { credentials } = session
+
+      if (!credentials || !credentials.accessKeyId) {
+        throw new Error('No AWS credentials found')
+      }
+
+      // Initialize Lambda client with user's credentials
+      const lambdaClient = new LambdaClient({
+        region: AWS_REGION,
+        credentials: {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken,
+        },
+      })
+
+      // Call the Lambda function to get presigned URL
+      const invokeCommand = new InvokeCommand({
+        FunctionName: 's3-presigned-url',
+        Payload: JSON.stringify({ s3Uri }),
+      })
+
+      const lambdaResponse = await lambdaClient.send(invokeCommand)
+      const responsePayload = JSON.parse(new TextDecoder().decode(lambdaResponse.Payload))
+      
+      if (responsePayload.statusCode !== 200) {
+        const errorBody = JSON.parse(responsePayload.body)
+        throw new Error(errorBody.error || 'Failed to get presigned URL')
+      }
+
+      const { presignedUrl } = JSON.parse(responsePayload.body)
+
+      // Download the file using the presigned URL
+      const fileResponse = await fetch(presignedUrl)
+      if (!fileResponse.ok) {
+        throw new Error('Failed to download file')
+      }
+
+      const blob = await fileResponse.blob()
+      const url = window.URL.createObjectURL(blob)
+      let downloadLink = null
+      
+      try {
+        downloadLink = document.createElement('a')
+        downloadLink.href = url
+        downloadLink.download = fileName || s3Uri.split('/').pop()
+        document.body.appendChild(downloadLink)
+        downloadLink.click()
+      } finally {
+        // Ensure cleanup happens even if click fails
+        window.URL.revokeObjectURL(url)
+        if (downloadLink && downloadLink.parentNode) {
+          document.body.removeChild(downloadLink)
+        }
+      }
+    } catch (error) {
+      console.error('Error downloading file:', error)
+      alert(`Failed to download file: ${error.message}`)
+    } finally {
+      setDownloadingFiles(prev => {
+        const next = new Set(prev)
+        next.delete(s3Uri)
+        return next
+      })
+    }
+  }
 
   const sendMessage = async (e) => {
     e.preventDefault()
@@ -45,7 +124,7 @@ function ChatInterface({ user, signOut }) {
 
       // Initialize Bedrock Agent Runtime client with user's temporary credentials
       const client = new BedrockAgentRuntimeClient({
-        region: 'us-east-2',
+        region: AWS_REGION,
         credentials: {
           accessKeyId: credentials.accessKeyId,
           secretAccessKey: credentials.secretAccessKey,
@@ -76,14 +155,24 @@ function ChatInterface({ user, signOut }) {
       
       // Process the streaming response
       let assistantText = ''
+      const citations = []
       
       if (response.completion) {
         for await (const event of response.completion) {
+          // Handle text chunks
           if (event.chunk) {
             const chunk = event.chunk
             if (chunk.bytes) {
               const decodedChunk = new TextDecoder().decode(chunk.bytes)
               assistantText += decodedChunk
+            }
+          }
+          
+          // Handle citation events
+          if (event.citation) {
+            console.log('Citation event received:', event.citation)
+            if (event.citation.retrievedReferences) {
+              citations.push(...event.citation.retrievedReferences)
             }
           }
         }
@@ -92,6 +181,7 @@ function ChatInterface({ user, signOut }) {
       const assistantMessage = {
         role: 'assistant',
         content: assistantText || 'No response received from agent.',
+        citations: citations.length > 0 ? citations : undefined,
       }
 
       setMessages((prev) => [...prev, assistantMessage])
@@ -135,6 +225,63 @@ function ChatInterface({ user, signOut }) {
             <div className="message-content">
               <strong>{message.role === 'user' ? 'You' : 'AI'}:</strong>
               <p>{message.content}</p>
+              
+              {/* Display citations and file downloads for assistant messages */}
+              {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
+                <div className="citations">
+                  <div className="citations-header">
+                    <span className="citations-icon">📚</span>
+                    <strong>Referenced Documents ({message.citations.length})</strong>
+                  </div>
+                  <div className="citations-list">
+                    {message.citations.map((citation, citationIndex) => {
+                      const location = citation.location
+                      const s3Location = location?.s3Location
+                      const s3Uri = s3Location?.uri
+                      
+                      if (!s3Uri) return null
+                      
+                      // Extract filename from S3 URI
+                      const fileName = s3Uri.split('/').pop() || 'document.pdf'
+                      const isDownloading = downloadingFiles.has(s3Uri)
+                      
+                      // Get content preview if available
+                      const contentText = citation.content?.text
+                      
+                      return (
+                        <div key={citationIndex} className="citation-item">
+                          <div className="citation-info">
+                            <span className="file-icon">📄</span>
+                            <div className="citation-details">
+                              <div className="citation-filename">{fileName}</div>
+                              {contentText && (
+                                <div className="citation-preview">
+                                  {contentText.length > CITATION_PREVIEW_LENGTH 
+                                    ? `${contentText.substring(0, CITATION_PREVIEW_LENGTH)}...` 
+                                    : contentText}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => downloadFile(s3Uri, fileName)}
+                            className="download-button"
+                            disabled={isDownloading}
+                            title="Download document"
+                          >
+                            {isDownloading ? (
+                              <span className="download-spinner">⏳</span>
+                            ) : (
+                              <span className="download-icon">⬇️</span>
+                            )}
+                            {isDownloading ? 'Downloading...' : 'Download'}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
