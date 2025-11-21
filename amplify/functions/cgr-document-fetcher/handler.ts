@@ -6,6 +6,8 @@ const s3Client = new S3Client({});
 const S3_BUCKET = process.env.S3_BUCKET || 'knowledge-base-thelexai-laws-datasource-cri';
 const CGR_BASE_URL = 'https://cgrbuscador.cgr.go.cr/BuscadorWebCGR/testcsv';
 const MAX_CONCURRENT_DOWNLOADS = 5;
+const FETCH_TIMEOUT_MS = 300000; // 5 minutes timeout for slow server
+const MAX_RETRIES = 3;
 
 interface CsvRecord {
   Row?: string;
@@ -22,6 +24,18 @@ interface CsvRecord {
 interface LambdaEvent {
   startPage?: number;
   maxPages?: number;
+  searchFacet?: string;
+  searchFacetString?: string;
+  tipoFacet?: string;
+  searchText?: string;
+  searchText1?: string;
+  searchText2?: string;
+  select1?: string;
+  select2?: string;
+  fInicio?: string;
+  fFinal?: string;
+  recurrido?: string;
+  searchEsp?: string;
 }
 
 interface PageInfo {
@@ -30,28 +44,55 @@ interface PageInfo {
   records: CsvRecord[];
 }
 
+// Helper function to fetch with timeout and retry
+const fetchWithTimeout = async (url: string, retries = MAX_RETRIES): Promise<Response> => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  
+  try {
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      }
+    });
+    clearTimeout(timeout);
+    return response;
+  } catch (error) {
+    clearTimeout(timeout);
+    
+    if (retries > 0) {
+      console.log(`Fetch failed, retrying... (${MAX_RETRIES - retries + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+      return fetchWithTimeout(url, retries - 1);
+    }
+    
+    throw error;
+  }
+};
+
 // Fetch and parse a single page
-const fetchPage = async (pageNumber: number): Promise<PageInfo> => {
+const fetchPage = async (pageNumber: number, searchParams: Record<string, string> = {}): Promise<PageInfo> => {
   const params = new URLSearchParams({
-    searchFacet: '',
-    searchFacetString: '',
-    tipoFacet: '',
-    searchText: '',
-    searchText1: '',
-    searchText2: '',
-    select1: ' ',
-    select2: ' ',
-    fInicio: '',
-    fFinal: '',
-    recurrido: '',
-    searchEsp: '',
+    searchFacet: searchParams.searchFacet || '',
+    searchFacetString: searchParams.searchFacetString || '',
+    tipoFacet: searchParams.tipoFacet || '',
+    searchText: searchParams.searchText || '',
+    searchText1: searchParams.searchText1 || '',
+    searchText2: searchParams.searchText2 || '',
+    select1: searchParams.select1 || ' ',
+    select2: searchParams.select2 || ' ',
+    fInicio: searchParams.fInicio || '',
+    fFinal: searchParams.fFinal || '',
+    recurrido: searchParams.recurrido || '',
+    searchEsp: searchParams.searchEsp || '',
     pageAct: pageNumber.toString(),
   });
   const url = `${CGR_BASE_URL}?${params.toString()}`;
   
   console.log(`Fetching CSV from page ${pageNumber}: ${url}`);
   
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch CSV page ${pageNumber}: ${response.status} ${response.statusText}`);
   }
@@ -107,12 +148,29 @@ const fetchPage = async (pageNumber: number): Promise<PageInfo> => {
 export const handler = async (event: LambdaEvent) => {
   try {
     console.log('Starting CGR document fetcher - fetching all pages');
+    console.log('Event parameters:', JSON.stringify(event, null, 2));
     
     const startPage = event.startPage || 1;
     const maxPages = event.maxPages || 9999; // Maximum pages to fetch (safety limit)
     
+    // Extract search parameters from event
+    const searchParams = {
+      searchFacet: event.searchFacet || '',
+      searchFacetString: event.searchFacetString || '',
+      tipoFacet: event.tipoFacet || '',
+      searchText: event.searchText || '',
+      searchText1: event.searchText1 || '',
+      searchText2: event.searchText2 || '',
+      select1: event.select1 || ' ',
+      select2: event.select2 || ' ',
+      fInicio: event.fInicio || '',
+      fFinal: event.fFinal || '',
+      recurrido: event.recurrido || '',
+      searchEsp: event.searchEsp || '',
+    };
+    
     // Fetch first page to get total document count
-    const firstPage = await fetchPage(startPage);
+    const firstPage = await fetchPage(startPage, searchParams);
     console.log(`Total documents in system: ${firstPage.totalDocuments}`);
     
     // Calculate approximate total pages (assuming ~10-20 documents per page)
@@ -134,7 +192,7 @@ export const handler = async (event: LambdaEvent) => {
     
     while (currentPage <= totalPagesToFetch && consecutiveEmptyPages < maxConsecutiveEmptyPages) {
       try {
-        const pageData = await fetchPage(currentPage);
+        const pageData = await fetchPage(currentPage, searchParams);
         
         if (pageData.records.length === 0) {
           consecutiveEmptyPages++;
@@ -190,7 +248,7 @@ export const handler = async (event: LambdaEvent) => {
       console.log(`Processing: ${pdfUrl}`);
       
       // Download PDF
-      const pdfResponse = await fetch(pdfUrl);
+      const pdfResponse = await fetchWithTimeout(pdfUrl);
       if (!pdfResponse.ok) {
         throw new Error(`Failed to download PDF: ${pdfResponse.status} ${pdfResponse.statusText}`);
       }
