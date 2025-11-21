@@ -54,7 +54,11 @@ const fetchWithTimeout = async (url: string, retries = MAX_RETRIES): Promise<Res
       signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      }
+      },
+      // @ts-ignore - Node.js fetch undici options
+      headersTimeout: FETCH_TIMEOUT_MS,
+      bodyTimeout: FETCH_TIMEOUT_MS,
+      connectTimeout: FETCH_TIMEOUT_MS,
     });
     clearTimeout(timeout);
     return response;
@@ -62,7 +66,7 @@ const fetchWithTimeout = async (url: string, retries = MAX_RETRIES): Promise<Res
     clearTimeout(timeout);
     
     if (retries > 0) {
-      console.log(`Fetch failed, retrying... (${MAX_RETRIES - retries + 1}/${MAX_RETRIES})`);
+      console.log(`Fetch failed, retrying... (${MAX_RETRIES - retries + 1}/${MAX_RETRIES}). Error: ${error instanceof Error ? error.message : String(error)}`);
       await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
       return fetchWithTimeout(url, retries - 1);
     }
