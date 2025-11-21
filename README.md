@@ -200,37 +200,33 @@ The built files will be in the `dist/` directory.
 
 ## Customization
 
-### Change AI Model
-
-Edit `src/components/ChatInterface.jsx` and update the `modelId`:
-
-```javascript
-const modelId = 'anthropic.claude-3-haiku-20240307-v1:0' // Faster, cheaper
-// or
-const modelId = 'anthropic.claude-3-opus-20240229-v1:0' // More powerful
-```
-
-### Adjust Response Length
-
-Modify the `max_tokens` parameter in the payload:
-
-```javascript
-const payload = {
-  anthropic_version: 'bedrock-2023-05-31',
-  max_tokens: 2048, // Increase for longer responses
-  messages: [...]
-}
-```
-
 ### Update AWS Region
 
-Change the region in `src/components/ChatInterface.jsx`:
+Set the region in your `.env` file:
+
+```env
+VITE_AWS_REGION=us-west-2
+```
+
+If not set, it defaults to `us-east-2`.
+
+### Adjust Citation Preview Length
+
+Edit the `CITATION_PREVIEW_LENGTH` constant in `src/components/ChatInterface.jsx`:
 
 ```javascript
-const client = new BedrockRuntimeClient({
-  region: 'us-west-2', // Your preferred region
-  credentials: credentials
-})
+const CITATION_PREVIEW_LENGTH = 200 // Show more text in preview
+```
+
+### Configure Presigned URL Expiration
+
+Edit the Lambda function environment variable in `amplify/functions/s3-presigned-url/resource.ts`:
+
+```typescript
+environment: {
+  S3_BUCKET: S3_BUCKET,
+  MAX_EXPIRATION_SECONDS: '7200', // 2 hours instead of 1
+}
 ```
 
 ## Troubleshooting
