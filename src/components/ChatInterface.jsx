@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime'
+import { BedrockAgentRuntimeClient, InvokeAgentCommand } from '@aws-sdk/client-bedrock-agent-runtime'
 import { fetchAuthSession } from 'aws-amplify/auth'
 import './ChatInterface.css'
 
@@ -7,7 +7,12 @@ function ChatInterface({ user, signOut }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const messagesEndRef = useRef(null)
+  
+  // Bedrock Agent configuration
+  const AGENT_NAME = 'thelexai-laws-consultant-agent'
+  const AGENT_ALIAS_ID = import.meta.env.VITE_BEDROCK_AGENT_ALIAS_ID || 'TSTALIASID' // Use test alias by default
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -29,8 +34,6 @@ function ChatInterface({ user, signOut }) {
 
     try {
       // Get AWS credentials from Amplify
-
-      // Get AWS credentials from Amplify
       const session = await fetchAuthSession()
       console.log('Auth session from Amplify:', session)
 
@@ -40,8 +43,8 @@ function ChatInterface({ user, signOut }) {
         throw new Error('No AWS credentials found in Amplify Auth session')
       }
 
-      // Initialize Bedrock client with user's temporary credentials
-      const client = new BedrockRuntimeClient({
+      // Initialize Bedrock Agent Runtime client with user's temporary credentials
+      const client = new BedrockAgentRuntimeClient({
         region: 'us-east-2',
         credentials: {
           accessKeyId: credentials.accessKeyId,
@@ -50,50 +53,53 @@ function ChatInterface({ user, signOut }) {
         },
       })
 
-      // Prepare the request for Claude 3 Sonnet with full conversation history
-      const modelId = 'arn:aws:bedrock:us-east-2:164829817550:inference-profile/us.meta.llama4-scout-17b-instruct-v1:0'
-      const conversationText = updatedMessages
-        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n')
-
-      const payload = {
-        // This is what Llama is asking for
-        prompt: `${conversationText}\nAssistant:`,
-        max_gen_len: 512,      // equivalent idea to max_tokens
-        temperature: 0.7,
-        top_p: 0.9,
+      // Generate a new session ID if we don't have one
+      const currentSessionId = sessionId || `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      if (!sessionId) {
+        setSessionId(currentSessionId)
       }
 
-      const command = new InvokeModelCommand({
-        modelId,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify(payload),
+      // Get the agent ID by listing agents (in production, you'd store this)
+      // For now, we'll need to provide the agent ID directly
+      // You should replace this with your actual agent ID
+      const AGENT_ID = import.meta.env.VITE_BEDROCK_AGENT_ID || 'EL6UCVXXJB'
+
+      // Invoke the Bedrock Agent
+      const command = new InvokeAgentCommand({
+        agentId: AGENT_ID,
+        agentAliasId: AGENT_ALIAS_ID,
+        sessionId: currentSessionId,
+        inputText: input,
       })
 
       const response = await client.send(command)
-      const rawBody = new TextDecoder().decode(response.body)
-      console.log('Bedrock raw response:', rawBody)
-
-      const responseBody = JSON.parse(rawBody)
-
-      // Llama response format
-      const assistantText =
-        responseBody.generation ||
-        responseBody.output_text || // just in case format changes
-        JSON.stringify(responseBody)
+      
+      // Process the streaming response
+      let assistantText = ''
+      
+      if (response.completion) {
+        for await (const event of response.completion) {
+          if (event.chunk) {
+            const chunk = event.chunk
+            if (chunk.bytes) {
+              const decodedChunk = new TextDecoder().decode(chunk.bytes)
+              assistantText += decodedChunk
+            }
+          }
+        }
+      }
 
       const assistantMessage = {
         role: 'assistant',
-        content: assistantText,
+        content: assistantText || 'No response received from agent.',
       }
 
       setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
-      console.error('Error calling Bedrock:', error)
+      console.error('Error calling Bedrock Agent:', error)
       const errorMessage = {
         role: 'assistant',
-        content: `Error: ${error.message}. Make sure your AWS credentials have access to Amazon Bedrock and the model is enabled in your region.`
+        content: `Error: ${error.message}. Make sure your AWS credentials have access to Amazon Bedrock Agents and the agent is properly configured.`
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
@@ -106,7 +112,7 @@ function ChatInterface({ user, signOut }) {
       <div className="chat-header">
         <div>
           <h1>TheLex AI Chat</h1>
-          <p className="user-info">Powered by Amazon Bedrock • Logged in as {user?.username}</p>
+          <p className="user-info">Powered by Amazon Bedrock Agent ({AGENT_NAME}) • Logged in as {user?.username}</p>
         </div>
         <button onClick={signOut} className="sign-out-button">
           Sign Out
@@ -116,8 +122,8 @@ function ChatInterface({ user, signOut }) {
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="welcome-message">
-            <h2>Welcome to TheLex AI Chat! 👋</h2>
-            <p>Ask me anything and I'll respond using Amazon Bedrock's AI models.</p>
+            <h2>Welcome to TheLex AI Legal Consultant! 👋</h2>
+            <p>Ask me about legal matters and I'll assist you using the {AGENT_NAME} powered by Amazon Bedrock.</p>
           </div>
         )}
         

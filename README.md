@@ -1,14 +1,15 @@
 # thelexaiapp
 
-AI-powered chatbot application that connects with Amazon Bedrock, built with AWS Amplify, React, and Vite.
+AI-powered legal consultation chatbot that connects with Amazon Bedrock Agent, built with AWS Amplify, React, and Vite.
 
 ## Features
 
-- 🤖 AI Chatbot powered by Amazon Bedrock (Claude 3 models)
+- 🤖 AI Legal Consultant powered by Amazon Bedrock Agent (thelexai-laws-consultant-agent)
 - 🔐 AWS Amplify authentication with secure user management
 - ⚡️ Vite for fast development and optimized builds
 - ⚛️ React 19 for modern UI development
 - 🎨 Beautiful, responsive chat interface
+- 💬 Conversational session management with Bedrock Agent
 - 📦 Ready for AWS Amplify deployment
 
 ## Prerequisites
@@ -16,8 +17,9 @@ AI-powered chatbot application that connects with Amazon Bedrock, built with AWS
 - Node.js 18+ and npm
 - AWS Account with access to:
   - Amazon Cognito (for authentication)
-  - Amazon Bedrock (for AI models)
+  - Amazon Bedrock Agents (specifically the thelexai-laws-consultant-agent)
 - AWS Amplify CLI (optional, for local backend development)
+- Bedrock Agent ID and Alias ID for your deployed agent
 
 ## Getting Started
 
@@ -34,14 +36,35 @@ cd thelexaiapp
 npm install
 ```
 
-### 3. Configure AWS Services
+### 3. Configure Environment Variables
 
-#### Step 1: Set up Amazon Bedrock
+Create a `.env` file in the root directory (copy from `.env.example`):
 
+```bash
+cp .env.example .env
+```
+
+Update the `.env` file with your Bedrock Agent configuration:
+
+```env
+VITE_BEDROCK_AGENT_ID=your-agent-id-here
+VITE_BEDROCK_AGENT_ALIAS_ID=TSTALIASID
+```
+
+To find your Agent ID:
 1. Go to the [Amazon Bedrock Console](https://console.aws.amazon.com/bedrock/)
-2. Navigate to "Model access" in the left sidebar
-3. Request access to the Claude 3 models (Sonnet, Haiku, or Opus)
-4. Wait for approval (usually instant for most models)
+2. Navigate to "Agents" in the left sidebar
+3. Find "thelexai-laws-consultant-agent" and copy its Agent ID
+4. Copy the Alias ID (use `TSTALIASID` for testing or your production alias)
+
+### 4. Configure AWS Services
+
+#### Step 1: Set up Amazon Bedrock Agent
+
+The application uses the `thelexai-laws-consultant-agent` Bedrock Agent. Ensure:
+1. The agent is deployed and active in your AWS account
+2. The agent has the necessary permissions and knowledge bases configured
+3. You have the Agent ID and Alias ID ready
 
 #### Step 2: Configure AWS Amplify Authentication
 
@@ -51,7 +74,7 @@ npm install
 2. Click "New app" → "Host web app"
 3. Connect your GitHub repository
 4. Add authentication through the Amplify Console UI
-5. Configure IAM roles to include Bedrock permissions:
+5. Configure IAM roles to include Bedrock Agent permissions:
    ```json
    {
      "Version": "2012-10-17",
@@ -59,9 +82,9 @@ npm install
        {
          "Effect": "Allow",
          "Action": [
-           "bedrock:InvokeModel"
+           "bedrock:InvokeAgent"
          ],
-         "Resource": "arn:aws:bedrock:*:*:foundation-model/*"
+         "Resource": "arn:aws:bedrock:us-east-2:*:agent/*"
        }
      ]
    }
