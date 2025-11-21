@@ -1,0 +1,12 @@
+{
+  "name": "cgr-document-fetcher",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.926.0",
+    "csv-parse": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1"
+  }
+}
