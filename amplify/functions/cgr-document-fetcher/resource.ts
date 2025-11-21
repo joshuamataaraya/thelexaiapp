@@ -5,4 +5,7 @@ export const cgrDocumentFetcher = defineFunction({
   entry: './handler.ts',
   timeoutSeconds: 900, // 15 minutes - needed for downloading multiple PDFs
   memoryMB: 512,
+  environment: {
+    S3_BUCKET: 'knowledge-base-thelexai-laws-datasource-cri',
+  },
 });
