@@ -157,7 +157,8 @@ export const handler = async (event: LambdaEvent) => {
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error) {
         console.error(`Error fetching page ${currentPage}:`, error);
-        consecutiveEmptyPages++;
+        // Don't count fetch errors as empty pages - retry or continue
+        // Only increment currentPage to continue to next page
         currentPage++;
       }
     }
@@ -174,7 +175,13 @@ export const handler = async (event: LambdaEvent) => {
     
     // Helper function to sanitize metadata values for S3 (ASCII only)
     const sanitizeMetadata = (value: string): string => {
-      return encodeURIComponent(value.substring(0, 2000)); // S3 metadata limit is 2KB
+      // S3 metadata limit is 2048 bytes per key, URL encoding expands size
+      // Start with reasonable substring, encode, then truncate if needed
+      let encoded = encodeURIComponent(value.substring(0, 1000));
+      if (encoded.length > 2048) {
+        encoded = encoded.substring(0, 2048);
+      }
+      return encoded;
     };
     
     // Process document with error handling
@@ -196,7 +203,8 @@ export const handler = async (event: LambdaEvent) => {
       const pathParts = urlObj.pathname.split('/');
       let filename = pathParts[pathParts.length - 1];
       // Remove any non-alphanumeric characters except dots, hyphens, and underscores
-      filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+      // Collapse multiple underscores to single underscore for readability
+      filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_');
       
       // Create metadata from CSV record
       const metadata = {
