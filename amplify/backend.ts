@@ -30,3 +30,11 @@ backend.s3PresignedUrl.resources.lambda.addToRolePolicy(
     resources: [`arn:aws:s3:::${S3_BUCKET}/*`],
   })
 );
+
+// Grant authenticated users permission to invoke the presigned URL Lambda function
+backend.auth.resources.authenticatedUserIamRole.addToPrincipalPolicy(
+  new PolicyStatement({
+    actions: ['lambda:InvokeFunction'],
+    resources: [backend.s3PresignedUrl.resources.lambda.functionArn],
+  })
+);
