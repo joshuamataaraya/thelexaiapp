@@ -1,6 +1,14 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { parse } from 'csv-parse/sync';
 import { randomUUID } from 'crypto';
+import { Agent } from 'undici';
+
+// Configure undici agent with custom timeouts
+const agent = new Agent({
+  connectTimeout: 300000, // 5 minutes
+  bodyTimeout: 300000, // 5 minutes
+  headersTimeout: 300000, // 5 minutes
+});
 
 const s3Client = new S3Client({});
 const S3_BUCKET = process.env.S3_BUCKET || 'knowledge-base-thelexai-laws-datasource-cri';
@@ -55,10 +63,8 @@ const fetchWithTimeout = async (url: string, retries = MAX_RETRIES): Promise<Res
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
       },
-      // @ts-ignore - Node.js fetch undici options
-      headersTimeout: FETCH_TIMEOUT_MS,
-      bodyTimeout: FETCH_TIMEOUT_MS,
-      connectTimeout: FETCH_TIMEOUT_MS,
+      // @ts-ignore - undici dispatcher option
+      dispatcher: agent,
     });
     clearTimeout(timeout);
     return response;
@@ -67,7 +73,7 @@ const fetchWithTimeout = async (url: string, retries = MAX_RETRIES): Promise<Res
     
     if (retries > 0) {
       console.log(`Fetch failed, retrying... (${MAX_RETRIES - retries + 1}/${MAX_RETRIES}). Error: ${error instanceof Error ? error.message : String(error)}`);
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds before retry
       return fetchWithTimeout(url, retries - 1);
     }
     
