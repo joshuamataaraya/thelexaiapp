@@ -3,6 +3,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3Client = new S3Client({});
 const S3_BUCKET = process.env.S3_BUCKET!;
+const MAX_EXPIRATION_SECONDS = parseInt(process.env.MAX_EXPIRATION_SECONDS || '3600', 10);
 
 interface S3PresignedUrlEvent {
   s3Uri?: string;
@@ -73,7 +74,7 @@ export const handler = async (event: S3PresignedUrlEvent): Promise<S3PresignedUr
     });
 
     const presignedUrl = await getSignedUrl(s3Client, command, {
-      expiresIn: Math.min(expiresIn, 3600), // Max 1 hour
+      expiresIn: Math.min(expiresIn, MAX_EXPIRATION_SECONDS),
     });
 
     return {

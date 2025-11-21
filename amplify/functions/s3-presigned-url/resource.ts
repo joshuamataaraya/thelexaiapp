@@ -10,5 +10,6 @@ export const s3PresignedUrl = defineFunction({
   memoryMB: 256,
   environment: {
     S3_BUCKET: S3_BUCKET,
+    MAX_EXPIRATION_SECONDS: '3600', // 1 hour default, can be overridden
   },
 });

@@ -15,6 +15,8 @@ function ChatInterface({ user, signOut }) {
   // Bedrock Agent configuration
   const AGENT_NAME = 'thelexai-laws-consultant-agent'
   const AGENT_ALIAS_ID = import.meta.env.VITE_BEDROCK_AGENT_ALIAS_ID || 'TSTALIASID' // Use test alias by default
+  const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-2'
+  const CITATION_PREVIEW_LENGTH = 150
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -27,6 +29,9 @@ function ChatInterface({ user, signOut }) {
   const downloadFile = async (s3Uri, fileName) => {
     setDownloadingFiles(prev => new Set(prev).add(s3Uri))
     
+    // AWS region configuration
+    const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-2'
+    
     try {
       const session = await fetchAuthSession()
       const { credentials } = session
@@ -37,7 +42,7 @@ function ChatInterface({ user, signOut }) {
 
       // Initialize Lambda client with user's credentials
       const lambdaClient = new LambdaClient({
-        region: 'us-east-2',
+        region: AWS_REGION,
         credentials: {
           accessKeyId: credentials.accessKeyId,
           secretAccessKey: credentials.secretAccessKey,
@@ -69,13 +74,21 @@ function ChatInterface({ user, signOut }) {
 
       const blob = await fileResponse.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName || s3Uri.split('/').pop()
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      let downloadLink = null
+      
+      try {
+        downloadLink = document.createElement('a')
+        downloadLink.href = url
+        downloadLink.download = fileName || s3Uri.split('/').pop()
+        document.body.appendChild(downloadLink)
+        downloadLink.click()
+      } finally {
+        // Ensure cleanup happens even if click fails
+        window.URL.revokeObjectURL(url)
+        if (downloadLink && downloadLink.parentNode) {
+          document.body.removeChild(downloadLink)
+        }
+      }
     } catch (error) {
       console.error('Error downloading file:', error)
       alert(`Failed to download file: ${error.message}`)
@@ -111,7 +124,7 @@ function ChatInterface({ user, signOut }) {
 
       // Initialize Bedrock Agent Runtime client with user's temporary credentials
       const client = new BedrockAgentRuntimeClient({
-        region: 'us-east-2',
+        region: AWS_REGION,
         credentials: {
           accessKeyId: credentials.accessKeyId,
           secretAccessKey: credentials.secretAccessKey,
@@ -243,8 +256,8 @@ function ChatInterface({ user, signOut }) {
                               <div className="citation-filename">{fileName}</div>
                               {contentText && (
                                 <div className="citation-preview">
-                                  {contentText.length > 150 
-                                    ? `${contentText.substring(0, 150)}...` 
+                                  {contentText.length > CITATION_PREVIEW_LENGTH 
+                                    ? `${contentText.substring(0, CITATION_PREVIEW_LENGTH)}...` 
                                     : contentText}
                                 </div>
                               )}
