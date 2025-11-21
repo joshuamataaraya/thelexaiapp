@@ -29,41 +29,66 @@ function ChatInterface({ user, signOut }) {
 
     try {
       // Get AWS credentials from Amplify
-      const { credentials } = await fetchAuthSession()
-      
-      // Initialize Bedrock client with user's credentials
+
+      // Get AWS credentials from Amplify
+      const session = await fetchAuthSession()
+      console.log('Auth session from Amplify:', session)
+
+      const { credentials } = session
+
+      if (!credentials || !credentials.accessKeyId) {
+        throw new Error('No AWS credentials found in Amplify Auth session')
+      }
+
+      // Initialize Bedrock client with user's temporary credentials
       const client = new BedrockRuntimeClient({
-        region: 'us-east-2', // Update with your preferred region
-        credentials: credentials
+        region: 'us-east-2',
+        credentials: {
+          accessKeyId: credentials.accessKeyId,
+          secretAccessKey: credentials.secretAccessKey,
+          sessionToken: credentials.sessionToken,
+        },
       })
 
       // Prepare the request for Claude 3 Sonnet with full conversation history
-      const modelId = 'meta.llama4-maverick-17b-instruct-v1:0'
+      const modelId = 'arn:aws:bedrock:us-east-2:164829817550:inference-profile/us.meta.llama4-scout-17b-instruct-v1:0'
+      const conversationText = updatedMessages
+        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n')
+
       const payload = {
-        anthropic_version: 'bedrock-2023-05-31',
-        max_tokens: 1024,
-        messages: updatedMessages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }))
+        // This is what Llama is asking for
+        prompt: `${conversationText}\nAssistant:`,
+        max_gen_len: 512,      // equivalent idea to max_tokens
+        temperature: 0.7,
+        top_p: 0.9,
       }
 
       const command = new InvokeModelCommand({
-        modelId: modelId,
+        modelId,
         contentType: 'application/json',
         accept: 'application/json',
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
 
       const response = await client.send(command)
-      const responseBody = JSON.parse(new TextDecoder().decode(response.body))
-      
+      const rawBody = new TextDecoder().decode(response.body)
+      console.log('Bedrock raw response:', rawBody)
+
+      const responseBody = JSON.parse(rawBody)
+
+      // Llama response format
+      const assistantText =
+        responseBody.generation ||
+        responseBody.output_text || // just in case format changes
+        JSON.stringify(responseBody)
+
       const assistantMessage = {
         role: 'assistant',
-        content: responseBody.content[0].text
+        content: assistantText,
       }
-      
-      setMessages(prev => [...prev, assistantMessage])
+
+      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
       console.error('Error calling Bedrock:', error)
       const errorMessage = {
