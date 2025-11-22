@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import datetime as dt
+import json
 import re
 import sys
 from typing import List, Dict, Set
@@ -16,7 +17,7 @@ PROFILE_NAME = "thelexai-profile-us-east-2"
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Fetch CGR CSV results and upload PDFs to S3."
+        description="Fetch CGR CSV results and upload PDFs (and metadata) to S3."
     )
     parser.add_argument(
         "-d",
@@ -214,6 +215,27 @@ def upload_to_s3(s3_client, bucket: str, key: str, content: bytes):
     )
 
 
+def upload_metadata_to_s3(s3_client, bucket: str, key: str, metadata: Dict):
+    """
+    Upload metadata JSON sidecar file for a given document.
+
+    Bedrock KB expects a structure like:
+    {
+      "metadataAttributes": {
+        "field1": "value",
+        ...
+      }
+    }
+    """
+    body = json.dumps(metadata, ensure_ascii=False).encode("utf-8")
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=body,
+        ContentType="application/json",
+    )
+
+
 def process_date(
     s3_client,
     bucket: str,
@@ -274,8 +296,34 @@ def process_date(
             try:
                 upload_to_s3(s3_client, bucket, key, pdf_bytes)
             except Exception as e:
-                print(f"Error uploading to S3 ({bucket}/{key}): {e}", file=sys.stderr)
+                print(f"Error uploading PDF to S3 ({bucket}/{key}): {e}", file=sys.stderr)
                 continue
+
+            # Build and upload metadata sidecar for this PDF
+            metadata_key = f"{key}.metadata.json"
+            metadata = {
+                "metadataAttributes": {
+                    "row_number": row.get("row_number", ""),
+                    "fecha_emision": row.get("fecha_emision", ""),
+                    "fecha_publicacion": row.get("fecha_publicacion", ""),
+                    "institucion": row.get("institucion", ""),
+                    "emite": row.get("emite", ""),
+                    "tipo_documental": row.get("tipo_documental", ""),
+                    "proceso": row.get("proceso", ""),
+                    "asunto": row.get("asunto", ""),
+                    "source_url": url,
+                    # extra context fields that might be handy:
+                    "search_date_iso": date.isoformat(),
+                    "search_date_cgr": date_str_dmy,
+                }
+            }
+
+            try:
+                print(f"Uploading metadata: s3://{bucket}/{metadata_key}")
+                upload_metadata_to_s3(s3_client, bucket, metadata_key, metadata)
+            except Exception as e:
+                print(f"Error uploading metadata to S3 ({bucket}/{metadata_key}): {e}", file=sys.stderr)
+                # Don't fail the whole loop if metadata upload fails
 
         page += 1
 
@@ -288,7 +336,6 @@ def main():
 
     session = boto3.Session(profile_name=PROFILE_NAME)
     s3_client = session.client("s3", region_name=(args.region or "us-east-2"))
-
 
     seen_urls: Set[str] = set()
 
