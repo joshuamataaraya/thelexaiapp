@@ -14,6 +14,7 @@ function ChatInterface({ user, signOut }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingStatus, setLoadingStatus] = useState('')
   const [downloadingFiles, setDownloadingFiles] = useState(new Set())
   const messagesEndRef = useRef(null)
   
@@ -330,6 +331,7 @@ function ChatInterface({ user, signOut }) {
 
     try {
       // Save user message to database
+      setLoadingStatus('Saving your message...')
       await saveMessage(conversationToUse.id, 'user', userInput)
       
       // Update conversation title based on first message if it's still "New Conversation"
@@ -339,7 +341,9 @@ function ChatInterface({ user, signOut }) {
           : userInput
         await updateConversationTitle(conversationToUse.id, title)
       }
+      
       // Get AWS credentials from Amplify
+      setLoadingStatus('Connecting to AI agent...')
       const session = await fetchAuthSession()
       console.log('Auth session from Amplify:', session)
 
@@ -368,6 +372,7 @@ function ChatInterface({ user, signOut }) {
       const AGENT_ID = import.meta.env.VITE_BEDROCK_AGENT_ID || 'EL6UCVXXJB'
 
       // Invoke the Bedrock Agent
+      setLoadingStatus('Analyzing your query...')
       const command = new InvokeAgentCommand({
         agentId: AGENT_ID,
         agentAliasId: AGENT_ALIAS_ID,
@@ -377,11 +382,14 @@ function ChatInterface({ user, signOut }) {
 
       const response = await bedrockClient.send(command)
       
+      setLoadingStatus('Searching knowledge base...')
+      
       // Process the streaming response
       let assistantText = ''
       const citations = []
       
       if (response.completion) {
+        setLoadingStatus('Generating response...')
         for await (const event of response.completion) {
           // Handle text chunks
           if (event.chunk) {
@@ -389,12 +397,14 @@ function ChatInterface({ user, signOut }) {
             if (chunk.bytes) {
               const decodedChunk = new TextDecoder().decode(chunk.bytes)
               assistantText += decodedChunk
+              setLoadingStatus('Generating response...')
             }
           }
           
           // Handle citation events
           if (event.citation) {
             console.log('Citation event received:', event.citation)
+            setLoadingStatus('Retrieving source documents...')
             if (event.citation.retrievedReferences) {
               citations.push(...event.citation.retrievedReferences)
             }
@@ -411,6 +421,7 @@ function ChatInterface({ user, signOut }) {
       setMessages((prev) => [...prev, assistantMessage])
 
       // Save assistant message to database
+      setLoadingStatus('Saving response...')
       await saveMessage(
         conversationToUse.id, 
         'assistant', 
@@ -426,6 +437,7 @@ function ChatInterface({ user, signOut }) {
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
+      setLoadingStatus('')
     }
   }
 
@@ -535,7 +547,10 @@ function ChatInterface({ user, signOut }) {
           <div className="message assistant-message">
             <div className="message-content">
               <strong>AI:</strong>
-              <p className="typing-indicator">Thinking...</p>
+              <div className="loading-container">
+                <div className="loading-spinner"></div>
+                <p className="loading-status">{loadingStatus || 'Thinking...'}</p>
+              </div>
             </div>
           </div>
         )}

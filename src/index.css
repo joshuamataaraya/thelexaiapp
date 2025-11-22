@@ -4,13 +4,28 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: #213547;
+  color: #0f172a;
   background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* Modern color palette - simple and professional */
+  --primary-color: #0ea5e9;
+  --primary-hover: #0284c7;
+  --primary-light: #7dd3fc;
+  --secondary-color: #6366f1;
+  --accent-color: #10b981;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-light: #94a3b8;
+  --background-light: #f8fafc;
+  --background-white: #ffffff;
+  --background-gray: #f1f5f9;
+  --border-light: #e2e8f0;
+  --border-medium: #cbd5e0;
 }
 
 * {
@@ -33,7 +48,7 @@ body {
 @media (prefers-color-scheme: dark) {
   :root {
     color: rgba(255, 255, 255, 0.87);
-    background-color: #242424;
+    background-color: #0f172a;
   }
 }
 
