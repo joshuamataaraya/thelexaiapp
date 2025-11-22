@@ -12,6 +12,34 @@ const schema = a.schema({
       content: a.string(),
     })
     .authorization((allow) => [allow.guest()]),
+  
+  // Conversation model - stores chat conversations
+  Conversation: a
+    .model({
+      title: a.string().required(),
+      userId: a.string().required(),
+      sessionId: a.string().required(),
+      lastMessageAt: a.datetime(),
+      createdAt: a.datetime(),
+      messages: a.hasMany('Message', 'conversationId'),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['read', 'create', 'update', 'delete'])
+    ]),
+  
+  // Message model - stores individual messages in conversations
+  Message: a
+    .model({
+      conversationId: a.id().required(),
+      conversation: a.belongsTo('Conversation', 'conversationId'),
+      role: a.string().required(), // 'user' or 'assistant'
+      content: a.string().required(),
+      citations: a.json(), // Store citations as JSON
+      createdAt: a.datetime(),
+    })
+    .authorization((allow) => [
+      allow.owner().to(['read', 'create', 'update', 'delete'])
+    ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
@@ -19,7 +47,7 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
-    defaultAuthorizationMode: 'identityPool',
+    defaultAuthorizationMode: 'userPool',
   },
 });
 
