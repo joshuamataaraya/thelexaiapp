@@ -72,10 +72,20 @@ function ChatInterface({ user, signOut }) {
           })
           
           // Parse citations from JSON string
-          const parsed = sorted.map(msg => ({
-            ...msg,
-            citations: msg.citations ? JSON.parse(msg.citations) : undefined
-          }))
+          const parsed = sorted.map(msg => {
+            let citations = undefined
+            if (msg.citations) {
+              try {
+                citations = JSON.parse(msg.citations)
+              } catch (error) {
+                console.error('Error parsing citations for message:', msg.id, error)
+              }
+            }
+            return {
+              ...msg,
+              citations
+            }
+          })
           
           setMessages(parsed)
         } catch (error) {
@@ -168,11 +178,22 @@ function ChatInterface({ user, signOut }) {
     try {
       const now = new Date().toISOString()
       
+      // Safely stringify citations
+      let citationsJson = null
+      if (citations) {
+        try {
+          citationsJson = JSON.stringify(citations)
+        } catch (error) {
+          console.error('Error stringifying citations:', error)
+          // Continue without citations if stringify fails
+        }
+      }
+      
       const { data: newMessage } = await client.models.Message.create({
         conversationId,
         role,
         content,
-        citations: citations ? JSON.stringify(citations) : null,
+        citations: citationsJson,
         createdAt: now
       })
       

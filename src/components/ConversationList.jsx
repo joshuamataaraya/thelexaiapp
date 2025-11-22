@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './ConversationList.css'
 
 function ConversationList({ 
@@ -10,18 +10,41 @@ function ConversationList({
   isLoading 
 }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null)
+  const [timeoutId, setTimeoutId] = useState(null)
 
   const handleDelete = (e, conversationId) => {
     e.stopPropagation()
     if (deleteConfirmId === conversationId) {
       onDeleteConversation(conversationId)
       setDeleteConfirmId(null)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        setTimeoutId(null)
+      }
     } else {
+      // Clear any existing timeout
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      
       setDeleteConfirmId(conversationId)
       // Auto-reset confirmation after 3 seconds
-      setTimeout(() => setDeleteConfirmId(null), 3000)
+      const newTimeoutId = setTimeout(() => {
+        setDeleteConfirmId(null)
+        setTimeoutId(null)
+      }, 3000)
+      setTimeoutId(newTimeoutId)
     }
   }
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [timeoutId])
 
   const formatDate = (dateString) => {
     if (!dateString) return ''

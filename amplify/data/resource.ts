@@ -34,7 +34,7 @@ const schema = a.schema({
       conversation: a.belongsTo('Conversation', 'conversationId'),
       role: a.string().required(), // 'user' or 'assistant'
       content: a.string().required(),
-      citations: a.json(), // Store citations as JSON
+      citations: a.json(), // Array of citation objects from Bedrock Agent with structure: { location: { s3Location: { uri } }, content: { text } }
       createdAt: a.datetime(),
     })
     .authorization((allow) => [
