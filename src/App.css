@@ -5,3 +5,64 @@
   padding: 0;
 }
 
+/* Override Amplify Authenticator styles with professional theme */
+[data-amplify-authenticator] {
+  --amplify-colors-brand-primary-10: var(--primary-navy, #1e3a5f);
+  --amplify-colors-brand-primary-20: var(--primary-navy, #1e3a5f);
+  --amplify-colors-brand-primary-40: var(--primary-navy, #1e3a5f);
+  --amplify-colors-brand-primary-60: var(--primary-navy, #1e3a5f);
+  --amplify-colors-brand-primary-80: var(--secondary-blue, #2c5282);
+  --amplify-colors-brand-primary-90: var(--secondary-blue, #2c5282);
+  --amplify-colors-brand-primary-100: var(--secondary-blue, #2c5282);
+  
+  --amplify-colors-background-primary: var(--background-light, #f7fafc);
+  --amplify-colors-background-secondary: var(--background-white, #ffffff);
+  
+  --amplify-colors-font-primary: var(--text-primary, #1a2332);
+  --amplify-colors-font-secondary: var(--text-secondary, #4a5568);
+  --amplify-colors-font-tertiary: var(--text-light, #718096);
+  
+  --amplify-colors-border-primary: var(--border-light, #e2e8f0);
+  --amplify-colors-border-secondary: var(--border-medium, #cbd5e0);
+  
+  --amplify-components-button-primary-background-color: var(--primary-navy, #1e3a5f);
+  --amplify-components-button-primary-hover-background-color: var(--secondary-blue, #2c5282);
+  --amplify-components-button-primary-active-background-color: var(--primary-dark, #0f2642);
+  
+  --amplify-components-tabs-item-active-color: var(--primary-navy, #1e3a5f);
+  --amplify-components-tabs-item-active-border-color: var(--primary-navy, #1e3a5f);
+  --amplify-components-tabs-item-hover-color: var(--secondary-blue, #2c5282);
+  
+  --amplify-components-fieldcontrol-focus-border-color: var(--secondary-blue, #2c5282);
+}
+
+/* Additional custom overrides for professional appearance */
+[data-amplify-authenticator] [data-amplify-router] {
+  background-color: var(--background-white, #ffffff);
+  border: 1px solid var(--border-light, #e2e8f0);
+  box-shadow: 0 4px 20px rgba(30, 58, 95, 0.08);
+  border-radius: 8px;
+}
+
+[data-amplify-authenticator] button[type="submit"] {
+  background: linear-gradient(135deg, var(--primary-navy, #1e3a5f) 0%, var(--secondary-blue, #2c5282) 100%);
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+[data-amplify-authenticator] button[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(30, 58, 95, 0.25);
+}
+
+[data-amplify-authenticator] input:focus,
+[data-amplify-authenticator] select:focus {
+  border-color: var(--secondary-blue, #2c5282);
+  box-shadow: 0 0 0 1px var(--secondary-blue, #2c5282);
+}
+
+[data-amplify-authenticator] [data-amplify-container] {
+  background-color: var(--background-light, #f7fafc);
+}
+

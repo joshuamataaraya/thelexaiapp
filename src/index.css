@@ -4,13 +4,26 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: #213547;
+  color: #1a2332;
   background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* Professional color palette for legal application */
+  --primary-navy: #1e3a5f;
+  --primary-dark: #0f2642;
+  --secondary-blue: #2c5282;
+  --accent-gold: #c19a6b;
+  --text-primary: #1a2332;
+  --text-secondary: #4a5568;
+  --text-light: #718096;
+  --background-light: #f7fafc;
+  --background-white: #ffffff;
+  --border-light: #e2e8f0;
+  --border-medium: #cbd5e0;
 }
 
 * {
@@ -33,7 +46,7 @@ body {
 @media (prefers-color-scheme: dark) {
   :root {
     color: rgba(255, 255, 255, 0.87);
-    background-color: #242424;
+    background-color: #1a2332;
   }
 }
 
