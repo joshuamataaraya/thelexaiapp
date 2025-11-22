@@ -183,11 +183,6 @@
   }
 }
 
-.typing-indicator {
-  font-style: italic;
-  opacity: 0.7;
-}
-
 .chat-input-form {
   display: flex;
   gap: 1rem;
