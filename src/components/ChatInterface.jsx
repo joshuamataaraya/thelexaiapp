@@ -2,13 +2,18 @@ import { useState, useRef, useEffect } from 'react'
 import { BedrockAgentRuntimeClient, InvokeAgentCommand } from '@aws-sdk/client-bedrock-agent-runtime'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { fetchAuthSession } from 'aws-amplify/auth'
+import { generateClient } from 'aws-amplify/data'
+import ConversationList from './ConversationList'
 import './ChatInterface.css'
 
+const client = generateClient()
+
 function ChatInterface({ user, signOut }) {
+  const [conversations, setConversations] = useState([])
+  const [currentConversation, setCurrentConversation] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionId, setSessionId] = useState(null)
   const [downloadingFiles, setDownloadingFiles] = useState(new Set())
   const messagesEndRef = useRef(null)
   
@@ -25,6 +30,190 @@ function ChatInterface({ user, signOut }) {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Load conversations on mount
+  useEffect(() => {
+    const loadInitialConversations = async () => {
+      try {
+        const { data: conversationData } = await client.models.Conversation.list({
+          filter: { userId: { eq: user.username } },
+          selectionSet: ['id', 'title', 'sessionId', 'userId', 'lastMessageAt', 'createdAt']
+        })
+        
+        // Sort by lastMessageAt or createdAt, most recent first
+        const sorted = [...conversationData].sort((a, b) => {
+          const dateA = new Date(a.lastMessageAt || a.createdAt)
+          const dateB = new Date(b.lastMessageAt || b.createdAt)
+          return dateB - dateA
+        })
+        
+        setConversations(sorted)
+      } catch (error) {
+        console.error('Error loading conversations:', error)
+      }
+    }
+    
+    loadInitialConversations()
+  }, [user.username])
+
+  // Load messages when conversation changes
+  useEffect(() => {
+    const loadConversationMessages = async () => {
+      if (currentConversation) {
+        try {
+          const { data: messageData } = await client.models.Message.list({
+            filter: { conversationId: { eq: currentConversation.id } },
+            selectionSet: ['id', 'role', 'content', 'citations', 'createdAt', 'conversationId']
+          })
+          
+          // Sort by createdAt
+          const sorted = [...messageData].sort((a, b) => {
+            return new Date(a.createdAt) - new Date(b.createdAt)
+          })
+          
+          // Parse citations from JSON string
+          const parsed = sorted.map(msg => {
+            let citations = undefined
+            if (msg.citations) {
+              try {
+                citations = JSON.parse(msg.citations)
+              } catch (error) {
+                console.error('Error parsing citations for message:', msg.id, error)
+              }
+            }
+            return {
+              ...msg,
+              citations
+            }
+          })
+          
+          setMessages(parsed)
+        } catch (error) {
+          console.error('Error loading messages:', error)
+          setMessages([])
+        }
+      } else {
+        setMessages([])
+      }
+    }
+    
+    loadConversationMessages()
+  }, [currentConversation])
+
+  const createNewConversation = async () => {
+    try {
+      const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+      const now = new Date().toISOString()
+      
+      const { data: newConversation } = await client.models.Conversation.create({
+        title: 'New Conversation',
+        userId: user.username,
+        sessionId: newSessionId,
+        createdAt: now,
+        lastMessageAt: now
+      })
+      
+      setCurrentConversation(newConversation)
+      setConversations(prev => [newConversation, ...prev])
+      setMessages([])
+    } catch (error) {
+      console.error('Error creating conversation:', error)
+      alert('Failed to create new conversation')
+    }
+  }
+
+  const deleteConversation = async (conversationId) => {
+    try {
+      // Delete all messages first
+      const { data: messageData } = await client.models.Message.list({
+        filter: { conversationId: { eq: conversationId } }
+      })
+      
+      for (const message of messageData) {
+        await client.models.Message.delete({ id: message.id })
+      }
+      
+      // Delete the conversation
+      await client.models.Conversation.delete({ id: conversationId })
+      
+      setConversations(prev => prev.filter(c => c.id !== conversationId))
+      
+      if (currentConversation?.id === conversationId) {
+        setCurrentConversation(null)
+        setMessages([])
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error)
+      alert('Failed to delete conversation')
+    }
+  }
+
+  const selectConversation = (conversationId) => {
+    const conversation = conversations.find(c => c.id === conversationId)
+    if (conversation) {
+      setCurrentConversation(conversation)
+    }
+  }
+
+  const updateConversationTitle = async (conversationId, newTitle) => {
+    try {
+      await client.models.Conversation.update({
+        id: conversationId,
+        title: newTitle
+      })
+      
+      setConversations(prev => prev.map(c => 
+        c.id === conversationId ? { ...c, title: newTitle } : c
+      ))
+      
+      if (currentConversation?.id === conversationId) {
+        setCurrentConversation(prev => ({ ...prev, title: newTitle }))
+      }
+    } catch (error) {
+      console.error('Error updating conversation title:', error)
+    }
+  }
+
+  const saveMessage = async (conversationId, role, content, citations = null) => {
+    try {
+      const now = new Date().toISOString()
+      
+      // Safely stringify citations
+      let citationsJson = null
+      if (citations) {
+        try {
+          citationsJson = JSON.stringify(citations)
+        } catch (error) {
+          console.error('Error stringifying citations:', error)
+          // Continue without citations if stringify fails
+        }
+      }
+      
+      const { data: newMessage } = await client.models.Message.create({
+        conversationId,
+        role,
+        content,
+        citations: citationsJson,
+        createdAt: now
+      })
+      
+      // Update conversation's lastMessageAt
+      await client.models.Conversation.update({
+        id: conversationId,
+        lastMessageAt: now
+      })
+      
+      // Update local state
+      setConversations(prev => prev.map(c => 
+        c.id === conversationId ? { ...c, lastMessageAt: now } : c
+      ))
+      
+      return newMessage
+    } catch (error) {
+      console.error('Error saving message:', error)
+      return null
+    }
+  }
 
   const downloadFile = async (s3Uri, fileName) => {
     setDownloadingFiles(prev => new Set(prev).add(s3Uri))
@@ -105,13 +294,51 @@ function ChatInterface({ user, signOut }) {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    const userMessage = { role: 'user', content: input }
-    const updatedMessages = [...messages, userMessage]
-    setMessages(updatedMessages)
+    const userInput = input
     setInput('')
     setIsLoading(true)
 
+    // Create a new conversation if none exists
+    let conversationToUse = currentConversation
+    if (!conversationToUse) {
+      try {
+        const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+        const now = new Date().toISOString()
+        
+        const { data: newConversation } = await client.models.Conversation.create({
+          title: userInput.length > 50 ? userInput.substring(0, 50) + '...' : userInput,
+          userId: user.username,
+          sessionId: newSessionId,
+          createdAt: now,
+          lastMessageAt: now
+        })
+        
+        conversationToUse = newConversation
+        setCurrentConversation(newConversation)
+        setConversations(prev => [newConversation, ...prev])
+      } catch (error) {
+        console.error('Error creating conversation:', error)
+        setIsLoading(false)
+        alert('Failed to create new conversation')
+        return
+      }
+    }
+
+    const userMessage = { role: 'user', content: userInput }
+    const updatedMessages = [...messages, userMessage]
+    setMessages(updatedMessages)
+
     try {
+      // Save user message to database
+      await saveMessage(conversationToUse.id, 'user', userInput)
+      
+      // Update conversation title based on first message if it's still "New Conversation"
+      if (messages.length === 0 && conversationToUse.title === 'New Conversation') {
+        const title = userInput.length > 50 
+          ? userInput.substring(0, 50) + '...' 
+          : userInput
+        await updateConversationTitle(conversationToUse.id, title)
+      }
       // Get AWS credentials from Amplify
       const session = await fetchAuthSession()
       console.log('Auth session from Amplify:', session)
@@ -123,7 +350,7 @@ function ChatInterface({ user, signOut }) {
       }
 
       // Initialize Bedrock Agent Runtime client with user's temporary credentials
-      const client = new BedrockAgentRuntimeClient({
+      const bedrockClient = new BedrockAgentRuntimeClient({
         region: AWS_REGION,
         credentials: {
           accessKeyId: credentials.accessKeyId,
@@ -132,11 +359,8 @@ function ChatInterface({ user, signOut }) {
         },
       })
 
-      // Generate a new session ID if we don't have one
-      const currentSessionId = sessionId || `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-      if (!sessionId) {
-        setSessionId(currentSessionId)
-      }
+      // Use the conversation's session ID
+      const currentSessionId = conversationToUse.sessionId
 
       // Get the agent ID by listing agents (in production, you'd store this)
       // For now, we'll need to provide the agent ID directly
@@ -148,10 +372,10 @@ function ChatInterface({ user, signOut }) {
         agentId: AGENT_ID,
         agentAliasId: AGENT_ALIAS_ID,
         sessionId: currentSessionId,
-        inputText: input,
+        inputText: userInput,
       })
 
-      const response = await client.send(command)
+      const response = await bedrockClient.send(command)
       
       // Process the streaming response
       let assistantText = ''
@@ -185,6 +409,14 @@ function ChatInterface({ user, signOut }) {
       }
 
       setMessages((prev) => [...prev, assistantMessage])
+
+      // Save assistant message to database
+      await saveMessage(
+        conversationToUse.id, 
+        'assistant', 
+        assistantText || 'No response received from agent.',
+        citations.length > 0 ? citations : null
+      )
     } catch (error) {
       console.error('Error calling Bedrock Agent:', error)
       const errorMessage = {
@@ -198,22 +430,35 @@ function ChatInterface({ user, signOut }) {
   }
 
   return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <div>
-          <h1>TheLex AI Chat</h1>
-          <p className="user-info">Powered by Amazon Bedrock Agent ({AGENT_NAME}) • Logged in as {user?.username}</p>
+    <div className="app-layout">
+      <ConversationList
+        conversations={conversations}
+        currentConversationId={currentConversation?.id}
+        onSelectConversation={selectConversation}
+        onNewConversation={createNewConversation}
+        onDeleteConversation={deleteConversation}
+        isLoading={isLoading}
+      />
+      
+      <div className="chat-container">
+        <div className="chat-header">
+          <div>
+            <h1>TheLex AI Chat</h1>
+            <p className="user-info">Powered by Amazon Bedrock Agent ({AGENT_NAME}) • Logged in as {user?.username}</p>
+          </div>
+          <button onClick={signOut} className="sign-out-button">
+            Sign Out
+          </button>
         </div>
-        <button onClick={signOut} className="sign-out-button">
-          Sign Out
-        </button>
-      </div>
       
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="welcome-message">
             <h2>Welcome to TheLex AI Legal Consultant! 👋</h2>
             <p>Ask me about legal matters and I'll assist you using the {AGENT_NAME} powered by Amazon Bedrock.</p>
+            {!currentConversation && (
+              <p className="start-prompt">👈 Click "New Chat" to start a conversation</p>
+            )}
           </div>
         )}
         
@@ -315,6 +560,7 @@ function ChatInterface({ user, signOut }) {
           Send
         </button>
       </form>
+      </div>
     </div>
   )
 }

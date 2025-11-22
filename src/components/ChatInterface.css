@@ -1,10 +1,17 @@
+.app-layout {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
 .chat-container {
   display: flex;
   flex-direction: column;
+  flex: 1;
   height: 100vh;
-  max-width: 1200px;
-  margin: 0 auto;
   background-color: #ffffff;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -68,6 +75,13 @@
 .welcome-message p {
   margin: 0;
   font-size: 1.125rem;
+}
+
+.welcome-message .start-prompt {
+  margin-top: 1rem;
+  font-size: 1rem;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .message {
@@ -320,6 +334,10 @@
 
 /* Responsive design */
 @media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
   .chat-header {
     padding: 1rem;
   }
